@@ -33,6 +33,7 @@ impl LauncherConfig {
             if let Some(section) = ini.section(Some("launcher")) {
                 if let Some(game) = section.get("game") {
                     config.game = PathBuf::from(game);
+                    println!("[*] Game path overridden by config: {}", config.game.display());
                 }
                 match cpu_vendor {
                     CpuVendor::Intel => {
@@ -52,7 +53,7 @@ impl LauncherConfig {
             }
         }
 
-        if !Path::new(&config.game).exists() {
+        if !config.game.exists() {
             if let Some(found_game) = Self::find_game() {
                 config.game = found_game;
             } else {
@@ -63,7 +64,7 @@ impl LauncherConfig {
             }
         }
 
-        if !Path::new(&config.driver).exists() {
+        if !config.driver.exists() {
             if let Some(found_driver) = Self::find_driver(config.driver.file_name().and_then(|s| s.to_str()).unwrap_or("")) {
                 config.driver = found_driver;
             } else {
