@@ -2,21 +2,20 @@ use std::arch::x86_64::__cpuid;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
-use windows::Win32::Security::{DuplicateTokenEx, SecurityImpersonation, TOKEN_ALL_ACCESS, TokenPrimary};
-use windows::Win32::System::Threading::{CREATE_NEW_CONSOLE, LOGON_WITH_PROFILE, OpenProcess, PROCESS_QUERY_INFORMATION};
+use windows::core::PCWSTR;
+use windows::Win32::Security::{
+    DuplicateTokenEx, SecurityImpersonation, TokenPrimary, TOKEN_ALL_ACCESS,
+};
+use windows::Win32::System::Threading::{
+    CreateProcessWithTokenW, GetCurrentProcess, OpenProcess, OpenProcessToken,
+    WaitForSingleObject, CREATE_NEW_CONSOLE, LOGON_WITH_PROFILE, PROCESS_INFORMATION,
+    PROCESS_QUERY_INFORMATION, STARTUPINFOW,
+};
 use windows::Win32::UI::WindowsAndMessaging::{GetShellWindow, GetWindowThreadProcessId};
 use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
-    Security::{
-        GetTokenInformation,
-        TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
-    },
-    System::Threading::{
-        GetCurrentProcess, OpenProcessToken, PROCESS_INFORMATION, STARTUPINFOW,
-        WaitForSingleObject, CreateProcessWithTokenW
-    },
+    Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY},
 };
-use windows::core::{PCWSTR, PWSTR};
 
 struct OwnedHandle(HANDLE);
 
@@ -40,7 +39,7 @@ impl Drop for OwnedHandle {
 
 pub enum CpuVendor {
     Intel,
-    AMD
+    AMD,
 }
 
 impl ToString for CpuVendor {
@@ -96,8 +95,14 @@ pub fn is_elevated() -> bool {
 /// Launch a process as non-elevated user (fixes games like AFOP).
 pub fn launch_as_user(cmd: &str) -> Result<u32, String> {
     let game_path = Path::new(cmd);
-    let game_abs = std::fs::canonicalize(game_path)
-        .map_err(|e| format!("Invalid game path '{}': {}", game_path.display(), e))?;
+    let game_abs = if game_path.is_absolute() {
+        game_path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?
+            .join(game_path)
+    };
+
     let game_dir = game_abs
         .parent()
         .ok_or_else(|| format!("Game path has no parent directory: {}", game_abs.display()))?;
@@ -105,10 +110,6 @@ pub fn launch_as_user(cmd: &str) -> Result<u32, String> {
     let game_path_utf16: Vec<u16> = game_abs
         .as_os_str()
         .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    let mut cmd_utf16: Vec<u16> = format!("\"{}\"", game_abs.display())
-        .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
     let game_dir_utf16: Vec<u16> = game_dir
@@ -119,14 +120,16 @@ pub fn launch_as_user(cmd: &str) -> Result<u32, String> {
 
     unsafe {
         let hwnd = GetShellWindow();
-        if hwnd.0.is_null() { return Err("Could not find Shell Window".into()); }
+        if hwnd.0.is_null() {
+            return Err("Could not find Shell Window".into());
+        }
 
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
 
         let process_handle = OwnedHandle::new(
             OpenProcess(PROCESS_QUERY_INFORMATION, false, pid)
-                .map_err(|e| format!("OpenProcess failed: {}", e))?
+                .map_err(|e| format!("OpenProcess failed: {}", e))?,
         );
 
         let mut shell_token = HANDLE::default();
@@ -142,7 +145,8 @@ pub fn launch_as_user(cmd: &str) -> Result<u32, String> {
             SecurityImpersonation,
             TokenPrimary,
             &mut primary_token,
-        ).map_err(|e| format!("DuplicateTokenEx failed: {}", e))?;
+        )
+        .map_err(|e| format!("DuplicateTokenEx failed: {}", e))?;
         let primary_token = OwnedHandle::new(primary_token);
 
         let mut si = STARTUPINFOW::default();
@@ -153,22 +157,21 @@ pub fn launch_as_user(cmd: &str) -> Result<u32, String> {
             primary_token.raw(),
             LOGON_WITH_PROFILE,
             PCWSTR(game_path_utf16.as_ptr()),
-            Some(PWSTR(cmd_utf16.as_mut_ptr())),
+            None,
             CREATE_NEW_CONSOLE,
             None,
             PCWSTR(game_dir_utf16.as_ptr()),
             &si,
             &mut pi,
-        ).map_err(|e| format!("CreateProcessWithTokenW failed: {}", e))?;
+        )
+        .map_err(|e| format!("CreateProcessWithTokenW failed: {}", e))?;
 
         let process = OwnedHandle::new(pi.hProcess);
-        let thread = OwnedHandle::new(pi.hThread);
+        let _thread = OwnedHandle::new(pi.hThread);
         let pid = pi.dwProcessId;
 
         println!("[+] Game started (PID {}). Waiting for it to exit...", pid);
         WaitForSingleObject(process.raw(), u32::MAX);
-
-        let _ = thread;
 
         Ok(pid)
     }
