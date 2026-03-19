@@ -125,7 +125,7 @@ fn run(vendor: &CpuVendor) -> Result<(), String> {
     }
 
     if !driver_loaded {
-        return Err("The driver couldn't be loaded. Check if your have EfiGuard enabled or test signing mode active".to_string());
+        return Err("The driver couldn't be loaded. Be sure to have DSE disabled via the Windows advanced boot options.".to_string());
     }
 
     start_game_and_wait(&cfg.game);

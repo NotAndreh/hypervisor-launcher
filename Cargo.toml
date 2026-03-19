@@ -1,14 +1,14 @@
 [package]
 name = "hypervisor-launcher"
 authors = ["NotAndreh"]
-version = "1.2.0"
+version = "1.2.1"
 edition = "2024"
 build = "build.rs"
 
 [dependencies]
 iced-x86 = { version = "1.21.0", default-features = false, features = ["std", "decoder"] }
 rust-ini = "0.21.3"
-tempfile = "3.26.0"
+tempfile = "3.27.0"
 walkdir = "2.5.0"
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
