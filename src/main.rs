@@ -2,9 +2,6 @@
 #![allow(non_snake_case)]
 
 mod config;
-mod dse;
-mod ntapi;
-mod pe;
 mod platform;
 mod service;
 
@@ -79,30 +76,13 @@ fn run(vendor: &CpuVendor) -> Result<(), String> {
     );
 
     println!("[*] Acquiring privileges...");
-    if let Err(e) = ntapi::acquire_privileges() {
+    if let Err(e) = platform::acquire_privileges() {
         return Err(format!("Failed to acquire privileges: {}", e));
     }
     println!("[+] Privileges acquired.");
 
     println!("[*] Cleaning up any existing service '{}'...", cfg.service_name);
     service::stop_and_delete_service(&cfg.service_name);
-
-    println!("[*] Verifying if DSE is enabled...");
-    let efiguard = match dse::adjust_ci_options(0, false) {
-        Ok(old) => {
-            println!("[+] DSE disabled. Old g_CiOptions = 0x{:X}", old);
-            true
-        }
-        Err(e) => {
-            eprintln!("[!] Failed to disable DSE: {}", e);
-            if ntapi::is_test_signing_enabled() {
-                eprintln!("[*] Test signing is enabled.");
-            } else {
-                eprintln!("[*] Test signing is not enabled.");
-            }
-            false
-        }
-    };
 
     println!("[*] Creating and starting service '{}'...", cfg.service_name);
     let driver_loaded = match service::create_and_start_service(&cfg.service_name, &staged_driver_path) {
@@ -115,14 +95,6 @@ fn run(vendor: &CpuVendor) -> Result<(), String> {
             false
         }
     };
-
-    if efiguard {
-        println!("[*] Re-enabling DSE (value = 0x{:X})...", 6);
-        match dse::adjust_ci_options(6, false) {
-            Ok(_) => println!("[+] DSE re-enabled."),
-            Err(e) => eprintln!("[!] Failed to re-enable DSE: {}", e),
-        }
-    }
 
     if !driver_loaded {
         return Err("The driver couldn't be loaded. Be sure to have DSE disabled via the Windows advanced boot options.".to_string());

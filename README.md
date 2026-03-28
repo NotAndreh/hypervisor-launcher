@@ -1,6 +1,6 @@
 # Hypervisor Launcher
 
-A lightweight launcher that automates loading a hypervisor driver (Intel or AMD), launching a game under it, and cleaning up afterward. It handles DSE (Driver Signature Enforcement) bypass via [EfiGuard](https://github.com/Mattiwatti/EfiGuard), and loads the appropriate driver based on your CPU.
+A lightweight launcher that automates loading a hypervisor driver (Intel or AMD), launching a game under it, and cleaning up afterward. It loads the appropriate driver based on your CPU.
 
 ## Download
 
