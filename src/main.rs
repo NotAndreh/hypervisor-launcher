@@ -75,12 +75,6 @@ fn run(vendor: &CpuVendor) -> Result<(), String> {
         staged_driver_path.display()
     );
 
-    println!("[*] Acquiring privileges...");
-    if let Err(e) = platform::acquire_privileges() {
-        return Err(format!("Failed to acquire privileges: {}", e));
-    }
-    println!("[+] Privileges acquired.");
-
     println!("[*] Cleaning up any existing service '{}'...", cfg.service_name);
     service::stop_and_delete_service(&cfg.service_name);
 

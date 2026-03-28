@@ -2,8 +2,6 @@ use std::arch::x86_64::__cpuid;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
-use windows::Wdk::System::SystemServices::{SE_DEBUG_PRIVILEGE, SE_SYSTEM_ENVIRONMENT_PRIVILEGE};
-use windows::Win32::Foundation::{NTSTATUS, STATUS_SUCCESS};
 use windows::core::PCWSTR;
 use windows::Win32::Security::{
     DuplicateTokenEx, SecurityImpersonation, TokenPrimary, TOKEN_ALL_ACCESS,
@@ -18,16 +16,6 @@ use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
     Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY},
 };
-
-#[link(name = "ntdll")]
-unsafe extern "system" {
-    pub fn RtlAdjustPrivilege(
-        Privilege: i32,
-        Enable: u8,      // BOOLEAN
-        CurrentThread: u8, // BOOLEAN
-        WasEnabled: *mut u8,
-    ) -> NTSTATUS;
-}
 
 struct OwnedHandle(HANDLE);
 
@@ -79,31 +67,6 @@ pub fn get_cpu_vendor() -> Result<CpuVendor, String> {
         "AuthenticAMD" => Ok(CpuVendor::AMD),
         _ => Err(format!("Unknown CPU vendor: {}", str)),
     }
-}
-
-/// Acquire SE_SYSTEM_ENVIRONMENT_PRIVILEGE and SE_DEBUG_PRIVILEGE
-pub fn acquire_privileges() -> Result<(), String> {
-    unsafe {
-        let mut was_enabled: u8 = 0;
-
-        let status =
-            RtlAdjustPrivilege(SE_SYSTEM_ENVIRONMENT_PRIVILEGE, 1, 0, &mut was_enabled);
-        if status != STATUS_SUCCESS {
-            return Err(format!(
-                "Failed to acquire SE_SYSTEM_ENVIRONMENT_PRIVILEGE: 0x{:08X}",
-                status.0 as u32
-            ));
-        }
-
-        let status = RtlAdjustPrivilege(SE_DEBUG_PRIVILEGE, 1, 0, &mut was_enabled);
-        if status != STATUS_SUCCESS {
-            return Err(format!(
-                "Failed to acquire SE_DEBUG_PRIVILEGE: 0x{:08X}",
-                status.0 as u32
-            ));
-        }
-    }
-    Ok(())
 }
 
 /// Check if the current process is running with elevated privileges.
